@@ -1,29 +1,34 @@
 import socket
 from typing import List, Dict, Any
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 class Scanner:
     """Minimal port scanner with service fingerprinting."""
 
-    def __init__(self, host: str, timeout: float = 2.0):
+    def __init__(self, host: str, timeout: float = 2.0, workers: int = 10):
         """Initialize scanner with target host.
 
         Args:
             host: Target hostname or IP address
             timeout: Connection timeout in seconds
+            workers: Number of concurrent threads for scanning
 
         Raises:
-            ValueError: If host is empty or timeout is negative
+            ValueError: If host is empty, timeout is negative, or workers is invalid
         """
         if not host or not isinstance(host, str):
             raise ValueError("host must be a non-empty string")
         if timeout <= 0:
             raise ValueError("timeout must be a positive number")
+        if not isinstance(workers, int) or workers < 1:
+            raise ValueError("workers must be a positive integer")
         self.host = host
         self.timeout = timeout
+        self.workers = workers
 
     def scan(self, ports: List[int]) -> Dict[int, Dict[str, Any]]:
-        """Scan specified ports and attempt service detection.
+        """Scan specified ports concurrently and attempt service detection.
 
         Args:
             ports: List of port numbers to scan
@@ -43,8 +48,14 @@ class Scanner:
                 raise ValueError(f"invalid port number: {port}")
 
         results = {}
-        for port in ports:
-            results[port] = self._probe_port(port)
+        with ThreadPoolExecutor(max_workers=self.workers) as executor:
+            futures = {executor.submit(self._probe_port, port): port for port in ports}
+            for future in as_completed(futures):
+                port = futures[future]
+                try:
+                    results[port] = future.result()
+                except Exception as e:
+                    results[port] = {"status": "error", "error": str(e)}
         return results
 
     def _probe_port(self, port: int) -> Dict[str, Any]:
