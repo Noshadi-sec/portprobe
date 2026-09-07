@@ -67,11 +67,10 @@ class Scanner:
         Returns:
             Dict with status and service info
         """
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(self.timeout)
             sock.connect((self.host, port))
-            sock.close()
             return {"status": "open", "service": None}
         except socket.timeout:
             return {"status": "filtered", "service": None}
@@ -83,3 +82,5 @@ class Scanner:
             return {"status": "error", "error": f"Connection error: {str(e)}"}
         except Exception as e:
             return {"status": "error", "error": str(e)}
+        finally:
+            sock.close()
